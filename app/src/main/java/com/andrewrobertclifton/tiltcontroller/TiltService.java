@@ -9,6 +9,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -21,33 +23,37 @@ public class TiltService extends Service implements SensorEventListener {
     private static final String TAG = TiltService.class.getSimpleName();
     private static final String ACTION_START = "com.andrewrobertclifton.tiltcontroller.ACTION_START";
     private static final String ACTION_STOP = "com.andrewrobertclifton.tiltcontroller.ACTION_STOP";
+    private static final String FAKE_GPS_ACTION = "com.lexa.fakegps.START";
+    private static final String FAKE_GPS_PACKAGE = "com.lexa.fakegps";
+    private static final String FAKE_GPS_EXTRA_LAT = "lat";
+    private static final String FAKE_GPS_EXTRA_LONG = "long";
+
     private static final int UPDATE_INTERVAL = 1000;
+    private static final double DELTA = .00001;
+    private static final double THRESHOLD = Math.PI / 6;
+
     private static final int NOTIFICATION_ID = 0;
     private SensorManager sensorManager;
 
     private NotificationManager notificationManager;
+    private LocationManager locationManager;
     private Looper looper;
 
     private boolean running = false;
     private boolean calibrate = false;
-
-    public NotificationManager getNotificationManager() {
-        if (notificationManager == null) {
-            notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        }
-        return notificationManager;
-    }
 
     private final HandlerThread handlerThread;
 
     private Handler handler;
 
     private final float[] mAccelerometerReading = new float[3];
-    private final float[] mMagnetometerReading = new float[3];
 
+    private final float[] mMagnetometerReading = new float[3];
     private final float[] mRotationMatrix = new float[9];
+
     private final float[] orientationAngles = new float[3];
     private final float[] orientationAnglesOffset = new float[3];
+
 
     private Runnable runnable = new Runnable() {
         @Override
@@ -57,13 +63,34 @@ public class TiltService extends Service implements SensorEventListener {
                 if (calibrate) {
                     System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
                 }
-                StringBuilder stringBuilder = new StringBuilder();
-                for (Object f : orientationAngles) {
-                    stringBuilder.append(f);
-                    stringBuilder.append(" , ");
+//                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
+                try {
+                    Location location = getLocationManager().getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    double lat = location.getLatitude();
+                    double lon = location.getLongitude();
+                    boolean modified = false;
+                    Log.d(TAG, String.format("lat:%f , lon: %f", location.getLatitude(), location.getLongitude()));
+                    if (orientationAngles[2] > THRESHOLD) {
+                        modified = true;
+                        lon = lon + DELTA;
+                    } else if (orientationAngles[2] < -THRESHOLD) {
+                        modified = true;
+                        lon = lon - DELTA;
+                    }
+                    if (orientationAngles[1] > THRESHOLD) {
+                        modified = true;
+                        lat = lat + DELTA;
+                    } else if (orientationAngles[1] < -THRESHOLD) {
+                        modified = true;
+                        lat = lat - DELTA;
+                    }
+                    if (modified) {
+                        sendGPSUpdateIntent(lat, lon);
+                    }
+
+                } catch (SecurityException e) {
+
                 }
-                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
-                Log.d(TAG, stringBuilder.toString());
                 handler.postDelayed(runnable, UPDATE_INTERVAL);
             } else {
                 getNotificationManager().cancel(NOTIFICATION_ID);
@@ -77,6 +104,20 @@ public class TiltService extends Service implements SensorEventListener {
         looper = handlerThread.getLooper();
         handler = new Handler(looper);
 
+    }
+
+    public LocationManager getLocationManager() {
+        if (locationManager == null) {
+            locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        }
+        return locationManager;
+    }
+
+    public NotificationManager getNotificationManager() {
+        if (notificationManager == null) {
+            notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        }
+        return notificationManager;
     }
 
     public SensorManager getSensorManager() {
@@ -149,14 +190,22 @@ public class TiltService extends Service implements SensorEventListener {
     // the device's accelerometer and magnetometer.
     public void updateOrientationAngles() {
         // Update rotation matrix, which is needed to update orientation angles.
-        sensorManager.getRotationMatrix(mRotationMatrix, null,
+        SensorManager.getRotationMatrix(mRotationMatrix, null,
                 mAccelerometerReading, mMagnetometerReading);
 
         // "mRotationMatrix" now has up-to-date information.
 
-        sensorManager.getOrientation(mRotationMatrix, orientationAngles);
+        SensorManager.getOrientation(mRotationMatrix, orientationAngles);
 
         // "orientationAngles" now has up-to-date information.
+    }
+
+    public void sendGPSUpdateIntent(double lat, double lon) {
+        Intent intent = new Intent(FAKE_GPS_ACTION);
+        intent.putExtra(FAKE_GPS_EXTRA_LAT, lat);
+        intent.putExtra(FAKE_GPS_EXTRA_LONG, lon);
+        intent.setPackage(FAKE_GPS_PACKAGE);
+        this.startService(intent);
     }
 
     @Override
