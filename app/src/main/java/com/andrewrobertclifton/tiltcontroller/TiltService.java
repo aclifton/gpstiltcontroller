@@ -32,8 +32,8 @@ public class TiltService extends Service implements SensorEventListener {
     private static final String FAKE_GPS_EXTRA_LONG = "long";
 
     private static final int UPDATE_INTERVAL = 500;
-    private static final double DELTA = .0001;
-    private static final double THRESHOLD = Math.PI / 12;
+    private double DELTA = .0001;
+    private double THRESHOLD = Math.PI / 12;
 
     private static final int NOTIFICATION_ID = 0;
     private SensorManager sensorManager;
@@ -68,7 +68,7 @@ public class TiltService extends Service implements SensorEventListener {
                     calibrate = false;
                     System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
                 }
-                normalOrientationAnglesWithOffset();
+                normalizeOrientationAnglesWithOffset();
                 try {
                     Location location = getLocationManager().getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     double lat = location.getLatitude();
@@ -152,6 +152,8 @@ public class TiltService extends Service implements SensorEventListener {
         if (intent != null) {
             if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
                 running = true;
+                DELTA = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_MAX_MOVE, (float) DELTA);
+                THRESHOLD = SettingsActivity.getFloatPreference(sharedPreferences,SettingsActivity.PREFERENCE_TILT_THRESHOLD,(float) (THRESHOLD * 180.0 / Math.PI)) * Math.PI / 180.0;
                 registerListeners();
                 handler.post(runnable);
                 handler.postDelayed(new Runnable() {
@@ -221,7 +223,7 @@ public class TiltService extends Service implements SensorEventListener {
         return builder.build();
     }
 
-    public void normalOrientationAnglesWithOffset() {
+    public void normalizeOrientationAnglesWithOffset() {
         for (int x = 0; x < 3; x++) {
             orientationAngles[x] = normalizeAngle(orientationAngles[x] - orientationAnglesOffset[x]);
         }

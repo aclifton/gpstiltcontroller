@@ -13,6 +13,8 @@ import android.support.v4.app.ActivityCompat;
  */
 public class SettingsActivity extends PreferenceActivity {
     public static final String PREFERENCE_RUNNING = "running";
+    public static final String PREFERENCE_MAX_MOVE = "max_move";
+    public static final String PREFERENCE_TILT_THRESHOLD = "tilt_threshold";
 
     private static final int PERMISSION_REQUEST = 87879;
 
@@ -59,5 +61,14 @@ public class SettingsActivity extends PreferenceActivity {
     protected void onPause() {
         super.onPause();
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener);
+    }
+
+    public static float getFloatPreference(SharedPreferences sharedPreferences, String key, float defaultValue) {
+        try {
+            return Float.parseFloat(sharedPreferences.getString(key, Float.toString(defaultValue)));
+        } catch (ClassCastException e) {
+            sharedPreferences.edit().putFloat(key, defaultValue);
+            return defaultValue;
+        }
     }
 }

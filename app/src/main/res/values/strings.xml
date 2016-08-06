@@ -4,5 +4,6 @@
     <!-- Strings related to Settings -->
 
     <string name="pref_title_running">Enable tilt controller</string>
-    <string name="pref_description_running">Enable tilt controller</string>
+    <string name="pref_title_max_move">Max movement (degrees)</string>
+    <string name="pref_title_tilt_threshold">Tilt min threshold (degrees)</string>
 </resources>
