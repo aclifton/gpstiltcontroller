@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -192,8 +193,7 @@ public class TiltService extends Service implements SensorEventListener {
     private Notification getNotification() {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
         builder.setContentTitle(getResources().getString(R.string.app_name));
-        builder.setSmallIcon(R.mipmap.ic_launcher);
-        builder.setContentText("ct");
+        builder.setSmallIcon(R.drawable.ic_stat_main);
         builder.setOngoing(true);
 
         Intent intentContent = new Intent(Intent.ACTION_MAIN);
@@ -205,12 +205,12 @@ public class TiltService extends Service implements SensorEventListener {
         Intent intentCalibrate = new Intent(TiltService.ACTION_CALIBRATE);
         intentCalibrate.setClass(this,TiltService.class);
         PendingIntent pendingIntentCalibrate = PendingIntent.getService(this,0,intentCalibrate,0);
-        builder.addAction(R.mipmap.ic_launcher, "Calibrate", pendingIntentCalibrate);
+        builder.addAction(R.drawable.ic_stat_calibrate, "Calibrate", pendingIntentCalibrate);
 
         Intent intentStop = new Intent(TiltService.ACTION_STOP);
         intentStop.setClass(this,TiltService.class);
         PendingIntent pendingIntentStop = PendingIntent.getService(this,0,intentStop,0);
-        builder.addAction(R.mipmap.ic_launcher, "Stop", pendingIntentStop);
+        builder.addAction(R.drawable.ic_stat_stop, "Stop", pendingIntentStop);
 
         return builder.build();
     }
