@@ -2,6 +2,7 @@ package com.andrewrobertclifton.tiltcontroller;
 
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -23,13 +24,14 @@ public class TiltService extends Service implements SensorEventListener {
     private static final String TAG = TiltService.class.getSimpleName();
     private static final String ACTION_START = "com.andrewrobertclifton.tiltcontroller.ACTION_START";
     private static final String ACTION_STOP = "com.andrewrobertclifton.tiltcontroller.ACTION_STOP";
+    private static final String ACTION_CALIBRATE = "com.andrewrobertclifton.tiltcontroller.ACTION_CALIBRATE";
     private static final String FAKE_GPS_ACTION = "com.lexa.fakegps.START";
     private static final String FAKE_GPS_PACKAGE = "com.lexa.fakegps";
     private static final String FAKE_GPS_EXTRA_LAT = "lat";
     private static final String FAKE_GPS_EXTRA_LONG = "long";
 
-    private static final int UPDATE_INTERVAL = 1000;
-    private static final double DELTA = .00001;
+    private static final int UPDATE_INTERVAL = 500;
+    private static final double DELTA = .00005;
     private static final double THRESHOLD = Math.PI / 6;
 
     private static final int NOTIFICATION_ID = 0;
@@ -61,26 +63,26 @@ public class TiltService extends Service implements SensorEventListener {
             if (running) {
                 updateOrientationAngles();
                 if (calibrate) {
+                    calibrate = false;
                     System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
                 }
-//                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
                 try {
                     Location location = getLocationManager().getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     double lat = location.getLatitude();
                     double lon = location.getLongitude();
                     boolean modified = false;
                     Log.d(TAG, String.format("lat:%f , lon: %f", location.getLatitude(), location.getLongitude()));
-                    if (orientationAngles[2] > THRESHOLD) {
+                    if (orientationAngles[2] - orientationAnglesOffset[2] > THRESHOLD) {
                         modified = true;
                         lon = lon + DELTA;
-                    } else if (orientationAngles[2] < -THRESHOLD) {
+                    } else if (orientationAngles[2] - orientationAnglesOffset[2] < -THRESHOLD) {
                         modified = true;
                         lon = lon - DELTA;
                     }
-                    if (orientationAngles[1] > THRESHOLD) {
+                    if (orientationAngles[1] - orientationAnglesOffset[1] > THRESHOLD) {
                         modified = true;
                         lat = lat + DELTA;
-                    } else if (orientationAngles[1] < -THRESHOLD) {
+                    } else if (orientationAngles[1] - orientationAnglesOffset[1] < -THRESHOLD) {
                         modified = true;
                         lat = lat - DELTA;
                     }
@@ -134,19 +136,27 @@ public class TiltService extends Service implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null) {
-            return Service.START_STICKY;
-        }
-        if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
-            running = true;
-            calibrate = true;
-            registerListeners();
-            handler.post(runnable);
-            startForeground(NOTIFICATION_ID, getNotification());
-        } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
-            running = false;
-            getSensorManager().unregisterListener(this);
-            stopSelf();
+        startForeground(NOTIFICATION_ID, getNotification());
+        getNotificationManager().notify(NOTIFICATION_ID,getNotification());
+        if (intent != null) {
+            if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
+                running = true;
+                registerListeners();
+                handler.post(runnable);
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        calibrate = true;
+                    }
+                },1000);
+            } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
+                running = false;
+                getSensorManager().unregisterListener(this);
+                stopSelf();
+            } else if(TiltService.ACTION_CALIBRATE.equals(intent.getAction())){
+                calibrate = true;
+            }
+
         }
         return Service.START_STICKY;
     }
@@ -183,6 +193,25 @@ public class TiltService extends Service implements SensorEventListener {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
         builder.setContentTitle(getResources().getString(R.string.app_name));
         builder.setSmallIcon(R.mipmap.ic_launcher);
+        builder.setContentText("ct");
+        builder.setOngoing(true);
+
+        Intent intentContent = new Intent(Intent.ACTION_MAIN);
+        intentContent.addCategory(Intent.CATEGORY_LAUNCHER);
+        intentContent.setClass(this,TiltService.class);
+        PendingIntent pendingIntentContent = PendingIntent.getService(this,0,intentContent,0);
+        builder.setContentIntent(pendingIntentContent);
+
+        Intent intentCalibrate = new Intent(TiltService.ACTION_CALIBRATE);
+        intentCalibrate.setClass(this,TiltService.class);
+        PendingIntent pendingIntentCalibrate = PendingIntent.getService(this,0,intentCalibrate,0);
+        builder.addAction(R.mipmap.ic_launcher, "Calibrate", pendingIntentCalibrate);
+
+        Intent intentStop = new Intent(TiltService.ACTION_STOP);
+        intentStop.setClass(this,TiltService.class);
+        PendingIntent pendingIntentStop = PendingIntent.getService(this,0,intentStop,0);
+        builder.addAction(R.mipmap.ic_launcher, "Stop", pendingIntentStop);
+
         return builder.build();
     }
 
