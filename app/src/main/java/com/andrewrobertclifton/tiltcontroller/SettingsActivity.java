@@ -12,8 +12,10 @@ import android.support.v4.app.ActivityCompat;
  * Created by user on 8/4/16.
  */
 public class SettingsActivity extends PreferenceActivity {
-    private static final String PREFERENCE_RUNNING = "running";
+    public static final String PREFERENCE_RUNNING = "running";
+
     private static final int PERMISSION_REQUEST = 87879;
+
     private SharedPreferences sharedPreferences;
     private SharedPreferences.OnSharedPreferenceChangeListener listener = new SharedPreferences.OnSharedPreferenceChangeListener() {
         @Override
@@ -37,7 +39,7 @@ public class SettingsActivity extends PreferenceActivity {
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION},PERMISSION_REQUEST);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSION_REQUEST);
             return;
         }
         boolean running = sharedPreferences.getBoolean(PREFERENCE_RUNNING, false);
@@ -56,5 +58,6 @@ public class SettingsActivity extends PreferenceActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener);
     }
 }

@@ -3,31 +3,6 @@
 
     <!-- Strings related to Settings -->
 
-    <!-- Example General settings -->
-    <string name="pref_header_general">General</string>
-
     <string name="pref_title_running">Enable tilt controller</string>
     <string name="pref_description_running">Enable tilt controller</string>
-
-
-    <!-- Example settings for Data & Sync -->
-    <string name="pref_header_data_sync">Data &amp; sync</string>
-
-    <string name="pref_title_sync_frequency">Sync frequency</string>
-    <string-array name="pref_sync_frequency_titles">
-        <item>1 sec</item>
-        <item>2 sec</item>
-        <item>3 sec</item>
-        <item>4 sec</item>
-        <item>5 sec</item>
-    </string-array>
-    <string-array name="pref_sync_frequency_values">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-        <item>4</item>
-        <item>5</item>
-    </string-array>
-
-    <string name="pref_title_system_sync_settings">System sync settings</string>
 </resources>

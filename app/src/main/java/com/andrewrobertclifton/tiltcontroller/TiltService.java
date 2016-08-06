@@ -6,7 +6,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -17,8 +17,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.preference.PreferenceManager;
 import android.support.v7.app.NotificationCompat;
-import android.util.Log;
 
 public class TiltService extends Service implements SensorEventListener {
 
@@ -32,12 +32,13 @@ public class TiltService extends Service implements SensorEventListener {
     private static final String FAKE_GPS_EXTRA_LONG = "long";
 
     private static final int UPDATE_INTERVAL = 500;
-    private static final double DELTA = .00005;
-    private static final double THRESHOLD = Math.PI / 6;
+    private static final double DELTA = .0001;
+    private static final double THRESHOLD = Math.PI / 12;
 
     private static final int NOTIFICATION_ID = 0;
     private SensorManager sensorManager;
 
+    private SharedPreferences sharedPreferences;
     private NotificationManager notificationManager;
     private LocationManager locationManager;
     private Looper looper;
@@ -73,30 +74,27 @@ public class TiltService extends Service implements SensorEventListener {
                     double lat = location.getLatitude();
                     double lon = location.getLongitude();
                     boolean modified = false;
-                    if (orientationAngles[2] > THRESHOLD) {
+                    if (Math.abs(orientationAngles[2]) > THRESHOLD) {
                         modified = true;
-                        lon = lon + DELTA;
-                    } else if (orientationAngles[2] < -THRESHOLD) {
-                        modified = true;
-                        lon = lon - DELTA;
+                        lon = lon + DELTA * (orientationAngles[2] / Math.PI);
                     }
-                    if (orientationAngles[1] > THRESHOLD) {
+                    if (Math.abs(orientationAngles[1]) > THRESHOLD) {
                         modified = true;
-                        lat = lat + DELTA;
-                    } else if (orientationAngles[1] < -THRESHOLD) {
-                        modified = true;
-                        lat = lat - DELTA;
+                        lat = lat + DELTA * (orientationAngles[1] / Math.PI);
                     }
                     if (modified) {
                         sendGPSUpdateIntent(lat, lon);
                     }
-
                 } catch (SecurityException e) {
 
+                } catch (NullPointerException e) {
+
+                } finally {
+                    handler.postDelayed(runnable, UPDATE_INTERVAL);
                 }
-                handler.postDelayed(runnable, UPDATE_INTERVAL);
             } else {
                 getNotificationManager().cancel(NOTIFICATION_ID);
+                handlerThread.quit();
             }
         }
     };
@@ -107,6 +105,18 @@ public class TiltService extends Service implements SensorEventListener {
         looper = handlerThread.getLooper();
         handler = new Handler(looper);
 
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        unRegisterListeners();
     }
 
     public LocationManager getLocationManager() {
@@ -153,6 +163,7 @@ public class TiltService extends Service implements SensorEventListener {
             } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
                 running = false;
                 getSensorManager().unregisterListener(this);
+                sharedPreferences.edit().putBoolean(SettingsActivity.PREFERENCE_RUNNING, false).commit();
                 stopSelf();
             } else if (TiltService.ACTION_CALIBRATE.equals(intent.getAction())) {
                 calibrate = true;
@@ -171,11 +182,6 @@ public class TiltService extends Service implements SensorEventListener {
         getSensorManager().unregisterListener(this);
     }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        unRegisterListeners();
-    }
 
     // Get readings from accelerometer and magnetometer. To simplify calculations,
     // consider storing these readings as unit vectors.
