@@ -153,7 +153,7 @@ public class TiltService extends Service implements SensorEventListener {
             if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
                 running = true;
                 DELTA = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_MAX_MOVE, (float) DELTA);
-                THRESHOLD = SettingsActivity.getFloatPreference(sharedPreferences,SettingsActivity.PREFERENCE_TILT_THRESHOLD,(float) (THRESHOLD * 180.0 / Math.PI)) * Math.PI / 180.0;
+                THRESHOLD = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_TILT_THRESHOLD, (float) (THRESHOLD * 180.0 / Math.PI)) * Math.PI / 180.0;
                 registerListeners();
                 handler.post(runnable);
                 handler.postDelayed(new Runnable() {
@@ -231,10 +231,10 @@ public class TiltService extends Service implements SensorEventListener {
 
     public float normalizeAngle(float angle) {
         while (angle > Math.PI) {
-            angle = angle - (float) Math.PI;
+            angle = angle - (float) Math.PI * 2;
         }
         while (angle < -Math.PI) {
-            angle = angle + (float) Math.PI;
+            angle = angle + (float) Math.PI * 2;
         }
         return angle;
     }
