@@ -11,7 +11,7 @@ import android.support.v4.app.ActivityCompat;
 /**
  * Created by user on 8/4/16.
  */
-public class SettingsActivity extends PreferenceActivity {
+public class SettingsActivity extends PreferenceActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
     public static final String PREFERENCE_RUNNING = "running";
     public static final String PREFERENCE_MAX_MOVE = "max_move";
     public static final String PREFERENCE_TILT_THRESHOLD = "tilt_threshold";
@@ -19,20 +19,19 @@ public class SettingsActivity extends PreferenceActivity {
     private static final int PERMISSION_REQUEST = 87879;
 
     private SharedPreferences sharedPreferences;
-    private SharedPreferences.OnSharedPreferenceChangeListener listener = new SharedPreferences.OnSharedPreferenceChangeListener() {
-        @Override
-        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            switch (key) {
-                case PREFERENCE_RUNNING:
-                    if (sharedPreferences.getBoolean(key, false)) {
-                        TiltService.startService(SettingsActivity.this);
-                    } else {
-                        TiltService.stopService(SettingsActivity.this);
-                    }
-                    break;
-            }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        switch (key) {
+            case PREFERENCE_RUNNING:
+                if (sharedPreferences.getBoolean(key, false)) {
+                    TiltService.startService(SettingsActivity.this);
+                } else {
+                    TiltService.stopService(SettingsActivity.this);
+                }
+                break;
         }
-    };
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,13 +53,13 @@ public class SettingsActivity extends PreferenceActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        sharedPreferences.registerOnSharedPreferenceChangeListener(listener);
+        sharedPreferences.registerOnSharedPreferenceChangeListener(this);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener);
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(this);
     }
 
     public static float getFloatPreference(SharedPreferences sharedPreferences, String key, float defaultValue) {

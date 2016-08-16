@@ -206,8 +206,8 @@ public class TiltService extends Service implements SensorEventListener {
 
         Intent intentContent = new Intent(Intent.ACTION_MAIN);
         intentContent.addCategory(Intent.CATEGORY_LAUNCHER);
-        intentContent.setClass(this, TiltService.class);
-        PendingIntent pendingIntentContent = PendingIntent.getService(this, 0, intentContent, 0);
+        intentContent.setClass(getApplicationContext(),SettingsActivity.class);
+        PendingIntent pendingIntentContent = PendingIntent.getActivity(this,0,intentContent,0);
         builder.setContentIntent(pendingIntentContent);
 
         Intent intentCalibrate = new Intent(TiltService.ACTION_CALIBRATE);
