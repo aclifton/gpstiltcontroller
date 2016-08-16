@@ -2,9 +2,11 @@ package com.andrewrobertclifton.tiltcontroller;
 
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -15,26 +17,28 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.preference.PreferenceManager;
 import android.support.v7.app.NotificationCompat;
-import android.util.Log;
 
 public class TiltService extends Service implements SensorEventListener {
 
     private static final String TAG = TiltService.class.getSimpleName();
     private static final String ACTION_START = "com.andrewrobertclifton.tiltcontroller.ACTION_START";
     private static final String ACTION_STOP = "com.andrewrobertclifton.tiltcontroller.ACTION_STOP";
+    private static final String ACTION_CALIBRATE = "com.andrewrobertclifton.tiltcontroller.ACTION_CALIBRATE";
     private static final String FAKE_GPS_ACTION = "com.lexa.fakegps.START";
     private static final String FAKE_GPS_PACKAGE = "com.lexa.fakegps";
     private static final String FAKE_GPS_EXTRA_LAT = "lat";
     private static final String FAKE_GPS_EXTRA_LONG = "long";
 
-    private static final int UPDATE_INTERVAL = 1000;
-    private static final double DELTA = .00001;
-    private static final double THRESHOLD = Math.PI / 6;
+    private static final int UPDATE_INTERVAL = 500;
+    private double DELTA = .0001;
+    private double THRESHOLD = Math.PI / 12;
 
-    private static final int NOTIFICATION_ID = 0;
+    private static final int NOTIFICATION_ID = 7;
     private SensorManager sensorManager;
 
+    private SharedPreferences sharedPreferences;
     private NotificationManager notificationManager;
     private LocationManager locationManager;
     private Looper looper;
@@ -61,39 +65,37 @@ public class TiltService extends Service implements SensorEventListener {
             if (running) {
                 updateOrientationAngles();
                 if (calibrate) {
+                    calibrate = false;
                     System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
                 }
-//                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
+                normalizeOrientationAnglesWithOffset();
                 try {
                     Location location = getLocationManager().getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     double lat = location.getLatitude();
                     double lon = location.getLongitude();
                     boolean modified = false;
-                    Log.d(TAG, String.format("lat:%f , lon: %f", location.getLatitude(), location.getLongitude()));
-                    if (orientationAngles[2] > THRESHOLD) {
+                    if (Math.abs(orientationAngles[2]) > THRESHOLD) {
                         modified = true;
-                        lon = lon + DELTA;
-                    } else if (orientationAngles[2] < -THRESHOLD) {
-                        modified = true;
-                        lon = lon - DELTA;
+                        lon = lon + DELTA * (orientationAngles[2] / Math.PI);
                     }
-                    if (orientationAngles[1] > THRESHOLD) {
+                    if (Math.abs(orientationAngles[1]) > THRESHOLD) {
                         modified = true;
-                        lat = lat + DELTA;
-                    } else if (orientationAngles[1] < -THRESHOLD) {
-                        modified = true;
-                        lat = lat - DELTA;
+                        lat = lat + DELTA * (orientationAngles[1] / Math.PI);
                     }
                     if (modified) {
                         sendGPSUpdateIntent(lat, lon);
                     }
-
                 } catch (SecurityException e) {
 
+                } catch (NullPointerException e) {
+
+                } finally {
+                    handler.postDelayed(runnable, UPDATE_INTERVAL);
                 }
-                handler.postDelayed(runnable, UPDATE_INTERVAL);
             } else {
                 getNotificationManager().cancel(NOTIFICATION_ID);
+                handlerThread.quitSafely();
+                stopSelf();
             }
         }
     };
@@ -104,6 +106,18 @@ public class TiltService extends Service implements SensorEventListener {
         looper = handlerThread.getLooper();
         handler = new Handler(looper);
 
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        unRegisterListeners();
     }
 
     public LocationManager getLocationManager() {
@@ -134,19 +148,29 @@ public class TiltService extends Service implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null) {
-            return Service.START_STICKY;
-        }
-        if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
-            running = true;
-            calibrate = true;
-            registerListeners();
-            handler.post(runnable);
-            startForeground(NOTIFICATION_ID, getNotification());
-        } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
-            running = false;
-            getSensorManager().unregisterListener(this);
-            stopSelf();
+        if (intent != null) {
+            if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
+                running = true;
+                DELTA = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_MAX_MOVE, (float) DELTA);
+                THRESHOLD = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_TILT_THRESHOLD, (float) (THRESHOLD * 180.0 / Math.PI)) * Math.PI / 180.0;
+                registerListeners();
+                handler.post(runnable);
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        calibrate = true;
+                    }
+                }, 1000);
+                startForeground(NOTIFICATION_ID, getNotification());
+                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
+            } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
+                running = false;
+                getSensorManager().unregisterListener(this);
+                sharedPreferences.edit().putBoolean(SettingsActivity.PREFERENCE_RUNNING, false).commit();
+            } else if (TiltService.ACTION_CALIBRATE.equals(intent.getAction())) {
+                calibrate = true;
+            }
+
         }
         return Service.START_STICKY;
     }
@@ -160,11 +184,6 @@ public class TiltService extends Service implements SensorEventListener {
         getSensorManager().unregisterListener(this);
     }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        unRegisterListeners();
-    }
 
     // Get readings from accelerometer and magnetometer. To simplify calculations,
     // consider storing these readings as unit vectors.
@@ -182,8 +201,42 @@ public class TiltService extends Service implements SensorEventListener {
     private Notification getNotification() {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
         builder.setContentTitle(getResources().getString(R.string.app_name));
-        builder.setSmallIcon(R.mipmap.ic_launcher);
+        builder.setSmallIcon(R.drawable.ic_stat_main);
+        builder.setOngoing(true);
+
+        Intent intentContent = new Intent(Intent.ACTION_MAIN);
+        intentContent.addCategory(Intent.CATEGORY_LAUNCHER);
+        intentContent.setClass(getApplicationContext(),SettingsActivity.class);
+        PendingIntent pendingIntentContent = PendingIntent.getActivity(this,0,intentContent,0);
+        builder.setContentIntent(pendingIntentContent);
+
+        Intent intentCalibrate = new Intent(TiltService.ACTION_CALIBRATE);
+        intentCalibrate.setClass(this, TiltService.class);
+        PendingIntent pendingIntentCalibrate = PendingIntent.getService(this, 0, intentCalibrate, 0);
+        builder.addAction(R.drawable.ic_stat_calibrate, "Calibrate", pendingIntentCalibrate);
+
+        Intent intentStop = new Intent(TiltService.ACTION_STOP);
+        intentStop.setClass(this, TiltService.class);
+        PendingIntent pendingIntentStop = PendingIntent.getService(this, 0, intentStop, 0);
+        builder.addAction(R.drawable.ic_stat_stop, "Stop", pendingIntentStop);
+
         return builder.build();
+    }
+
+    public void normalizeOrientationAnglesWithOffset() {
+        for (int x = 0; x < 3; x++) {
+            orientationAngles[x] = normalizeAngle(orientationAngles[x] - orientationAnglesOffset[x]);
+        }
+    }
+
+    public float normalizeAngle(float angle) {
+        while (angle > Math.PI) {
+            angle = angle - (float) Math.PI * 2;
+        }
+        while (angle < -Math.PI) {
+            angle = angle + (float) Math.PI * 2;
+        }
+        return angle;
     }
 
     // Compute the three orientation angles based on the most recent readings from
