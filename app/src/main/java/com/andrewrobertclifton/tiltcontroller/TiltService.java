@@ -19,12 +19,15 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.support.v7.app.NotificationCompat;
+import android.util.Log;
 
 public class TiltService extends Service implements SensorEventListener {
 
     private static final String TAG = TiltService.class.getSimpleName();
     private static final String ACTION_START = "com.andrewrobertclifton.tiltcontroller.ACTION_START";
     private static final String ACTION_STOP = "com.andrewrobertclifton.tiltcontroller.ACTION_STOP";
+    private static final String ACTION_LOCK = "com.andrewrobertclifton.tiltcontroller.ACTION_LOCK";
+    private static final String ACTION_UNLOCK = "com.andrewrobertclifton.tiltcontroller.ACTION_UNLOCK";
     private static final String ACTION_CALIBRATE = "com.andrewrobertclifton.tiltcontroller.ACTION_CALIBRATE";
     private static final String FAKE_GPS_ACTION = "com.lexa.fakegps.START";
     private static final String FAKE_GPS_PACKAGE = "com.lexa.fakegps";
@@ -45,6 +48,7 @@ public class TiltService extends Service implements SensorEventListener {
 
     private boolean running = false;
     private boolean calibrate = false;
+    private boolean lockOrientation = false;
 
     private final HandlerThread handlerThread;
 
@@ -63,12 +67,14 @@ public class TiltService extends Service implements SensorEventListener {
         @Override
         public void run() {
             if (running) {
-                updateOrientationAngles();
-                if (calibrate) {
-                    calibrate = false;
-                    System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
+                if (!lockOrientation) {
+                    updateOrientationAngles();
+                    if (calibrate) {
+                        calibrate = false;
+                        System.arraycopy(orientationAngles, 0, orientationAnglesOffset, 0, orientationAngles.length);
+                    }
+                    normalizeOrientationAnglesWithOffset();
                 }
-                normalizeOrientationAnglesWithOffset();
                 try {
                     Location location = getLocationManager().getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     double lat = location.getLatitude();
@@ -150,6 +156,7 @@ public class TiltService extends Service implements SensorEventListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
             if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
+                lockOrientation = false;
                 running = true;
                 DELTA = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_MAX_MOVE, (float) DELTA);
                 THRESHOLD = SettingsActivity.getFloatPreference(sharedPreferences, SettingsActivity.PREFERENCE_TILT_THRESHOLD, (float) (THRESHOLD * 180.0 / Math.PI)) * Math.PI / 180.0;
@@ -169,6 +176,12 @@ public class TiltService extends Service implements SensorEventListener {
                 sharedPreferences.edit().putBoolean(SettingsActivity.PREFERENCE_RUNNING, false).commit();
             } else if (TiltService.ACTION_CALIBRATE.equals(intent.getAction())) {
                 calibrate = true;
+            } else if (TiltService.ACTION_LOCK.equals(intent.getAction())) {
+                lockOrientation = true;
+                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
+            } else if (TiltService.ACTION_UNLOCK.equals(intent.getAction())) {
+                lockOrientation = false;
+                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
             }
 
         }
@@ -206,9 +219,17 @@ public class TiltService extends Service implements SensorEventListener {
 
         Intent intentContent = new Intent(Intent.ACTION_MAIN);
         intentContent.addCategory(Intent.CATEGORY_LAUNCHER);
-        intentContent.setClass(getApplicationContext(),SettingsActivity.class);
-        PendingIntent pendingIntentContent = PendingIntent.getActivity(this,0,intentContent,0);
+        intentContent.setClass(getApplicationContext(), SettingsActivity.class);
+        PendingIntent pendingIntentContent = PendingIntent.getActivity(this, 0, intentContent, 0);
         builder.setContentIntent(pendingIntentContent);
+
+        String lockAction = lockOrientation ? TiltService.ACTION_UNLOCK : TiltService.ACTION_LOCK;
+        int lockRes = lockOrientation ? R.drawable.ic_stat_unlock : R.drawable.ic_stat_lock;
+        String lockTitle = lockOrientation ? "Unlock" : "Lock";
+        Intent intentLock = new Intent(lockAction);
+        intentLock.setClass(this, TiltService.class);
+        PendingIntent pendingIntentLock = PendingIntent.getService(this, 0, intentLock, 0);
+        builder.addAction(lockRes, lockTitle, pendingIntentLock);
 
         Intent intentCalibrate = new Intent(TiltService.ACTION_CALIBRATE);
         intentCalibrate.setClass(this, TiltService.class);
