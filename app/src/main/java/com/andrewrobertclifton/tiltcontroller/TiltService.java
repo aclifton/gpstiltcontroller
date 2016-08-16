@@ -35,7 +35,7 @@ public class TiltService extends Service implements SensorEventListener {
     private double DELTA = .0001;
     private double THRESHOLD = Math.PI / 12;
 
-    private static final int NOTIFICATION_ID = 0;
+    private static final int NOTIFICATION_ID = 7;
     private SensorManager sensorManager;
 
     private SharedPreferences sharedPreferences;
@@ -94,7 +94,8 @@ public class TiltService extends Service implements SensorEventListener {
                 }
             } else {
                 getNotificationManager().cancel(NOTIFICATION_ID);
-                handlerThread.quit();
+                handlerThread.quitSafely();
+                stopSelf();
             }
         }
     };
@@ -147,8 +148,6 @@ public class TiltService extends Service implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, getNotification());
-        getNotificationManager().notify(NOTIFICATION_ID, getNotification());
         if (intent != null) {
             if (TiltService.ACTION_START.equals(intent.getAction()) && !running) {
                 running = true;
@@ -162,11 +161,12 @@ public class TiltService extends Service implements SensorEventListener {
                         calibrate = true;
                     }
                 }, 1000);
+                startForeground(NOTIFICATION_ID, getNotification());
+                getNotificationManager().notify(NOTIFICATION_ID, getNotification());
             } else if (TiltService.ACTION_STOP.equals((intent.getAction()))) {
                 running = false;
                 getSensorManager().unregisterListener(this);
                 sharedPreferences.edit().putBoolean(SettingsActivity.PREFERENCE_RUNNING, false).commit();
-                stopSelf();
             } else if (TiltService.ACTION_CALIBRATE.equals(intent.getAction())) {
                 calibrate = true;
             }
